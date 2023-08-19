@@ -48,32 +48,28 @@
 
 // Scripted Pipeline
 node {
-    stage('Build') {
-        docker.image('python:2-alpine').inside {
-            sh 'pwd && ls'
-            sh 'python -m py_compile sources/add2vals.py sources/calc.py'
-        }
-    }
-
-    stage('Test') {
-        docker.image('qnib/pytest').inside {
-            sh 'py.test --verbose --junit-xml test-reports/results.xml sources/test_calc.py'
-        }
-        post {
-            always {
-                junit 'test-reports/results.xml'
+    try {
+        stage('Build') {
+            docker.image('python:2-alpine').inside {
+                sh 'python -m py_compile sources/add2vals.py sources/calc.py'
             }
         }
-    }
 
-    stage('Deliver') {
-        docker.image('cdrx/pyinstaller-linux:python2').inside {
-            sh 'pyinstaller --onefile sources/add2vals.py'
-        }
-        post {
-            success {
-                archiveArtifacts artifacts: 'dist/add2vals', allowEmptyArchive: true
+        stage('Test') {
+            docker.image('qnib/pytest').inside {
+                sh 'py.test --verbose --junit-xml test-reports/results.xml sources/test_calc.py'
             }
+            junit 'test-reports/results.xml'
         }
+
+        stage('Deliver') {
+            docker.image('cdrx/pyinstaller-linux:python2').inside {
+                sh 'pyinstaller --onefile sources/add2vals.py'
+            }
+            step([$class: 'ArtifactArchiver', artifacts: 'dist/add2vals', allowEmptyArchive: true])
+        }
+    } catch (Exception e) {
+        currentBuild.result = 'FAILURE'
+        throw e
     }
 }
