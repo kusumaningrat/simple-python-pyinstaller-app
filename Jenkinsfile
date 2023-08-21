@@ -5,7 +5,7 @@ pipeline {
         stage('Build') {
             agent {
                 docker {
-                    image 'python:2-alpine'
+                    image 'python:3.11.4-alpine3.18'
                 }
             }
             steps {
@@ -54,15 +54,12 @@ pipeline {
         }
         stage('Deploy') {
             when {
-                expression { return env.DEPLOY_APPROVED }
+                expression { return en  v.DEPLOY_APPROVED }
             }
             agent {
-                docker {
-                    image 'cdrx/pyinstaller-linux:python2'
+                docker.image('cdrx/pyinstaller-linux:python3').inside {
+                    sh 'pyinstaller --onefile sources/add2vals.py'
                 }
-            }
-            steps {
-                sh 'pyinstaller --onefile sources/add2vals.py'
             }
             post {
                 success {
