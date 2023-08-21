@@ -54,7 +54,7 @@ pipeline {
         }
         stage('Deploy') {
             when {
-                expression { return en  v.DEPLOY_APPROVED }
+                expression { return env.DEPLOY_APPROVED }
             }
             agent {
                 docker.image('cdrx/pyinstaller-linux:python3').inside {
