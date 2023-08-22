@@ -12,6 +12,13 @@ node {
             }
             junit 'test-reports/results.xml'
         }
+        
+        stage('Deploy') {
+            docker.image('cdrx/pyinstaller-linux:python3').inside {
+                sh 'pyinstaller --onefile sources/add2vals.py'
+            }
+            archiveArtifacts 'dist/add2vals'
+        }
     } catch (Exception e) {
         currentBuild.result = 'FAILURE'
         throw e
