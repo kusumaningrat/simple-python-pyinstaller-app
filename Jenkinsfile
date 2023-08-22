@@ -14,10 +14,25 @@ node {
         }
         
         stage('Deploy') {
-            docker.image('cdrx/pyinstaller-linux:python3').inside {
-                sh 'pyinstaller --onefile sources/add2vals.py'
+            // Define the Docker agent
+            def VOLUME = "${pwd()}/sources:/src"
+            def IMAGE = 'cdrx/pyinstaller-linux:python2'
+
+            // Set environment variables
+            env.VOLUME = VOLUME
+            env.IMAGE = IMAGE
+
+            // Execute steps within the Docker container
+            dir(path: env.BUILD_ID) {
+                sh "cd ${pwd()} && ls"
+                sh "docker run --rm -v ${VOLUME} ${IMAGE} 'pyinstaller -F add2vals.py'"
             }
-            archiveArtifacts 'dist/add2vals'
+
+            // Archive the artifacts
+            archiveArtifacts "${env.BUILD_ID}/sources/dist/add2vals"
+
+            // Cleanup build artifacts
+            sh "docker run --rm -v ${VOLUME} ${IMAGE} 'rm -rf build dist'"
         }
     } catch (Exception e) {
         currentBuild.result = 'FAILURE'
