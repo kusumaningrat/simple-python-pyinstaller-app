@@ -1,38 +1,61 @@
 node {
-    try {
-        stage('Build') {
-            docker.image('python:3.11.4-alpine3.18').inside {
-                sh 'python -m py_compile sources/add2vals.py sources/calc.py'
-                stash(name: 'compiled-results', includes: 'sources/*.py*')
-            }
+    environment {
+        CI = 'true'
+        DEPLOY_APPROVED = 'false' // Shared environment variable
+    }
+    stage('Build') {
+        docker.image('python:2-alpine').inside {
+            sh 'python -m py_compile sources/add2vals.py sources/calc.py'
+            stash name: 'compiled-results', includes: 'sources/*.py*'
         }
+    }
+    
+    stage('Test') {
+        docker.image('qnib/pytest').inside {
+            sh 'py.test --verbose --junit-xml test-reports/results.xml sources/test_calc.py'
+        }
+        junit 'test-reports/results.xml'
+    }
 
-        stage('Test') {
-            docker.image('qnib/pytest').inside {
-                sh 'py.test --verbose --junitxml=test-reports/results.xml sources/test_calc.py'
-            }
-            junit 'test-reports/results.xml'
-        }
-        
-        stage('Deploy') {
-            def VOLUME = "${pwd()}/sources:/src"
-            def IMAGE = 'cdrx/pyinstaller-linux:python3'
-            
-            try {
-                // Execute steps within the Docker container
-                dir("${pwd()}") {
-                    unstash(name: 'compiled-results')
-                    sh 'ls -l'
-                    sh "docker run --rm -v ${VOLUME} ${IMAGE} 'pyinstaller --onefile sources/add2vals.py'"
+    stage('Manual Approval') {
+        steps {
+            script {
+                def userInput = input(
+                    message: 'Lanjutkan ke tahap deploy? (Click "Proceed" to continue)',
+                    parameters: [
+                        [$class: 'ChoiceParameterDefinition', 
+                            choices: 'Proceed\nAbort', 
+                            description: 'Select an option',
+                            name: 'ACTION']
+                    ]
+                )
+                
+                if (userInput == 'Proceed') {
+                    echo 'Continuing to Deploy stage'
+                    DEPLOY_APPROVED = 'true' // Set the environment variable
+                } else {
+                    echo 'Aborting the pipeline'
+                    currentBuild.result = 'ABORTED'
+                    error('Pipeline aborted by user')
                 }
-                sleep(time: 60, unit: 'SECONDS')
-            } catch (Exception e) {
-                currentBuild.result = 'FAILURE'
-                throw e
+                echo "DEPLOY_APPROVED: ${DEPLOY_APPROVED}"
             }
         }
-    } catch (Exception e) {
-        currentBuild.result = 'FAILURE'
-        throw e
+    }
+
+    stage('Deploy') {
+         when {
+            expression { return env.DEPLOY_APPROVED }
+        }
+        dir("${BUILD_ID}") {
+            unstash 'compiled-results'
+            def VOLUME = "${pwd()}/sources:/src"
+            def IMAGE = 'cdrx/pyinstaller-linux:python2'
+            
+            sh "docker run --rm -v ${VOLUME} ${IMAGE} 'pyinstaller -F add2vals.py'"
+            
+            archiveArtifacts artifacts: "${BUILD_ID}/sources/dist/add2vals", allowEmptyArchive: true
+            sh "docker run --rm -v ${VOLUME} ${IMAGE} 'rm -rf build dist'"
+        }
     }
 }
