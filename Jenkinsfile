@@ -1,4 +1,3 @@
-// Scripted Pipeline
 node {
     try {
         stage('Build') {
@@ -17,4 +16,5 @@ node {
         currentBuild.result = 'FAILURE'
         throw e
     }
+
 }
